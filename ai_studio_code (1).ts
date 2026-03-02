@@ -6,6 +6,7 @@ import { createServer } from "http";
 interface Greeting {
   id: string;
   name: string;
+  recipient: string;
   message: string;
   timestamp: number;
 }
@@ -16,28 +17,31 @@ async function startServer() {
   const app = express();
   const server = createServer(app);
   const wss = new WebSocketServer({ server });
-  const PORT = process.env.PORT || 3000;
+  const PORT = Number(process.env.PORT) || 3000;
 
   app.use(express.json());
 
+  // API Routes
   app.get("/api/greetings", (req, res) => {
     res.json(greetings);
   });
 
   app.post("/api/greetings", (req, res) => {
-    const { name, message } = req.body;
-    if (!name || !message) {
-      return res.status(400).json({ error: "Name and message are required" });
+    const { name, recipient, message } = req.body;
+    if (!name || !recipient || !message) {
+      return res.status(400).json({ error: "Name, recipient, and message are required" });
     }
     const newGreeting: Greeting = {
       id: Math.random().toString(36).substring(7),
       name,
+      recipient,
       message,
       timestamp: Date.now(),
     };
     greetings.unshift(newGreeting);
     if (greetings.length > 50) greetings.pop();
 
+    // Broadcast to all clients
     const payload = JSON.stringify({ type: "GREETING_ADDED", data: newGreeting });
     wss.clients.forEach((client) => {
       if (client.readyState === WebSocket.OPEN) {
@@ -48,6 +52,7 @@ async function startServer() {
     res.status(201).json(newGreeting);
   });
 
+  // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
       server: { middlewareMode: true },
@@ -56,6 +61,7 @@ async function startServer() {
     app.use(vite.middlewares);
   } else {
     app.use(express.static("dist"));
+    // SPA fallback for production
     app.get("*", (req, res) => {
       res.sendFile("dist/index.html", { root: "." });
     });
