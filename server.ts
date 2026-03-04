@@ -1,4 +1,4 @@
-Import express from "express";
+import express from "express";
 import { createServer as createViteServer } from "vite";
 import { WebSocketServer, WebSocket } from "ws";
 import { createServer } from "http";
@@ -28,7 +28,6 @@ async function start() {
     });
     app.use(vite.middlewares);
   } else {
-    // This tells Render where your Holi animation files are
     app.use(express.static(path.resolve("dist/public")));
     app.get("*", (req, res) => {
       res.sendFile(path.resolve("dist/public/index.html"));
