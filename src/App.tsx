@@ -272,3 +272,171 @@ const InteractionLayer = React.memo(({ loading, theme }: { loading: boolean, the
     </div>
   );
 });
+export default function App() {
+  const [loading, setLoading] = useState(true);
+  const [copied, setCopied] = useState(false);
+  const [lang, setLang] = useState<"en" | "hi">("en");
+  const [currentTheme, setCurrentTheme] = useState<Theme>(themes[0]);
+  const [showThemeMenu, setShowThemeMenu] = useState(false);
+  const [greetings, setGreetings] = useState<Greeting[]>([]);
+  const [formData, setFormData] = useState({ name: "", recipient: "", message: "" });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [translatedMessages, setTranslatedMessages] = useState<Record<string, string>>({});
+  const [isTranslating, setIsTranslating] = useState<Record<string, boolean>>({});
+  
+  const bgMusic = useRef<HTMLAudioElement | null>(null);
+  const t = translations[lang];
+  const { scrollYProgress } = useScroll();
+  const backgroundY = useTransform(scrollYProgress, [0, 1], ["0%", "20%"]);
+
+  useEffect(() => {
+    fetch("/api/greetings").then(res => res.json()).then(setGreetings);
+    const timer = setTimeout(() => setLoading(false), 4000);
+    return () => clearTimeout(timer);
+  }, []);
+
+  const translateMessage = async (id: string, text: string) => {
+    if (lang === 'en' || translatedMessages[id] || isTranslating[id]) return;
+    setIsTranslating(prev => ({ ...prev, [id]: true }));
+    try {
+      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+      const response = await ai.models.generateContent({
+        model: "gemini-2.0-flash",
+        contents: `Translate this Holi greeting to Hindi. Keep the festive tone. Only return the translated text: "${text}"`,
+      });
+      if (response.text) setTranslatedMessages(prev => ({ ...prev, [id]: response.text! }));
+    } finally {
+      setIsTranslating(prev => ({ ...prev, [id]: false }));
+    }
+  };
+
+  useEffect(() => {
+    if (lang === 'hi') greetings.forEach(g => !translatedMessages[g.id] && translateMessage(g.id, g.message));
+  }, [lang, greetings]);
+
+  const postGreeting = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formData.name || !formData.recipient || !formData.message || isSubmitting) return;
+    setIsSubmitting(true);
+    try {
+      const res = await fetch("/api/greetings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(formData),
+      });
+      if (res.ok) {
+        setFormData({ name: "", recipient: "", message: "" });
+        fetch("/api/greetings").then(res => res.json()).then(setGreetings);
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="relative min-h-screen text-white font-sans overflow-x-hidden transition-colors duration-1000" style={{ backgroundColor: currentTheme.bg }}>
+      <AnimatePresence>
+        {loading && (
+          <motion.div key="preloader" exit={{ opacity: 0, y: -100 }} className="fixed inset-0 z-[100] bg-black flex flex-col items-center justify-center">
+            <motion.div animate={{ scale: [1, 1.05, 1] }} className="mb-10 w-32 h-32 border border-white/10 rounded-[2rem] bg-white/5 backdrop-blur-xl flex items-center justify-center relative overflow-hidden">
+              <span className="text-5xl font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-br from-pink-500 via-yellow-500 to-emerald-500 z-10">KSC</span>
+              <motion.div animate={{ rotate: 360 }} transition={{ duration: 10, repeat: Infinity, ease: "linear" }} className="absolute inset-0 border-t-2 border-pink-500/20 rounded-[2rem]" />
+            </motion.div>
+            <motion.h1 initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-3xl md:text-5xl font-serif italic text-white mb-4">Khushal Singh Chouhan</motion.h1>
+            <p className="text-[10px] uppercase tracking-[0.6em] text-slate-500">{t.craftedBy}</p>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <div className={`transition-opacity duration-1000 ${loading ? 'opacity-0' : 'opacity-100'}`}>
+        <InteractionLayer loading={loading} theme={currentTheme} />
+        <header className="fixed top-0 w-full z-50 p-8 flex justify-between items-center mix-blend-difference">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 border border-white/20 rounded-xl flex items-center justify-center bg-white/5 backdrop-blur-sm"><span className="font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-br from-pink-500 via-yellow-500 to-emerald-500">KSC</span></div>
+          </div>
+          <div className="flex gap-4">
+            <button onClick={() => setShowThemeMenu(!showThemeMenu)} className="bg-white/10 p-3 rounded-full border border-white/20"><Palette size={18} /></button>
+            <button onClick={() => setLang(l => l === "en" ? "hi" : "en")} className="bg-white/10 px-6 py-2 rounded-full border border-white/20 text-xs font-bold uppercase tracking-widest">{lang === "en" ? "Hindi" : "English"}</button>
+            <button onClick={() => navigator.clipboard.writeText(window.location.href).then(() => setCopied(true))} className="bg-white/10 px-6 py-2 rounded-full border border-white/20 text-xs font-bold uppercase tracking-widest">{copied ? "Copied!" : "Share"}</button>
+          </div>
+        </header>
+
+        <AnimatePresence>
+          {showThemeMenu && (
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="fixed top-24 right-8 bg-black/80 backdrop-blur-xl p-4 rounded-2xl z-50 border border-white/10 min-w-[180px]">
+              {themes.map(theme => (
+                <button key={theme.id} onClick={() => { setCurrentTheme(theme); setShowThemeMenu(false); }} className="block w-full text-left p-4 hover:bg-white/10 rounded-xl text-[10px] uppercase tracking-widest font-bold">{theme.name[lang]}</button>
+              ))}
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <section className="h-screen flex flex-col items-center justify-center text-center px-8">
+          <motion.span className="text-pink-500 text-[10px] uppercase tracking-[0.6em] mb-8">{t.festivalOfColors}</motion.span>
+          <h1 className="text-[clamp(3rem,15vw,10rem)] leading-[0.85] font-serif italic font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-pink-500 via-yellow-400 to-emerald-400 animate-shimmer" style={{ backgroundSize: '200% auto' }}>{t.heroTitle1}<br/>{t.heroTitle2}</h1>
+          <p className="mt-12 text-white/50 max-w-2xl mx-auto text-lg font-light">{t.visionText}</p>
+          <motion.div animate={{ y: [0, 10, 0] }} transition={{ duration: 2, repeat: Infinity }} className="mt-20 text-white/20 uppercase text-[10px] tracking-[0.4em]">{t.scrollToExplore}</motion.div>
+        </section>
+
+        <section id="vision" className="py-32 px-8 max-w-7xl mx-auto grid md:grid-cols-2 gap-24 items-center">
+          <motion.div initial={{ opacity: 0, x: -50 }} whileInView={{ opacity: 1, x: 0 }} className="aspect-[4/5] rounded-[3rem] overflow-hidden relative group">
+            <img src={t.visionImage} alt="Holi" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-1000" referrerPolicy="no-referrer" />
+            <div className="absolute bottom-12 left-12 pr-12"><p className="text-3xl font-serif italic">"Color is a power which directly influences the soul."</p></div>
+          </motion.div>
+          <div className="space-y-12">
+            <span className="text-pink-500 text-xs uppercase font-bold tracking-widest">{t.vision}</span>
+            <h2 className="text-7xl font-serif font-light leading-tight">{t.symphony}</h2>
+            <p className="text-white/60 text-lg leading-relaxed font-light">{t.visionText}</p>
+          </div>
+        </section>
+
+        <section id="wishes" className="py-32 px-8 bg-white/5">
+          <div className="max-w-4xl mx-auto bg-black/40 backdrop-blur-3xl p-20 rounded-[4rem] border border-white/10 text-center">
+            <h2 className="text-5xl font-serif italic mb-8">{t.sendGreetings}</h2>
+            <p className="text-white/50 mb-12 max-w-lg mx-auto">{t.greetingsDesc}</p>
+            <form onSubmit={postGreeting} className="space-y-6 text-left">
+              <input value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} placeholder={t.yourName} className="w-full bg-white/5 border border-white/10 p-5 rounded-2xl outline-none focus:border-pink-500" />
+              <input value={formData.recipient} onChange={e => setFormData({...formData, recipient: e.target.value})} placeholder={t.recipient} className="w-full bg-white/5 border border-white/10 p-5 rounded-2xl outline-none focus:border-yellow-500" />
+              <textarea value={formData.message} onChange={e => setFormData({...formData, message: e.target.value})} placeholder={t.message} rows={4} className="w-full bg-white/5 border border-white/10 p-5 rounded-2xl outline-none focus:border-emerald-500 resize-none" />
+              <button type="submit" className="w-full bg-white text-black py-5 rounded-2xl font-bold uppercase tracking-widest hover:bg-pink-500 hover:text-white transition-all flex items-center justify-center gap-3">{t.generate} <Send size={18} /></button>
+            </form>
+          </div>
+        </section>
+
+        <section className="py-32 px-8 max-w-7xl mx-auto">
+          <div className="text-center mb-20"><span className="text-pink-500 text-xs uppercase font-bold tracking-widest">{t.communityGreetings}</span><h2 className="text-5xl font-serif italic mt-4">{t.communityDesc}</h2></div>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-8">
+            <AnimatePresence mode="popLayout">
+              {greetings.map(g => (
+                <motion.div key={g.id} layout initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bg-white/5 border border-white/10 p-8 rounded-[2rem] hover:bg-white/10 transition-colors">
+                  <div className="w-12 h-12 bg-pink-500/20 rounded-2xl flex items-center justify-center text-pink-500 mb-6"><User size={24} /></div>
+                  <p className="text-xl italic mb-8 font-light leading-relaxed">"{translatedMessages[g.id] || g.message}"</p>
+                  <div className="pt-6 border-t border-white/5"><p className="text-xs uppercase tracking-widest text-white/40">{t.postedBy} <span className="text-white font-bold">{g.name}</span></p></div>
+                </motion.div>
+              ))}
+            </AnimatePresence>
+          </div>
+        </section>
+
+        <footer className="py-24 px-8 border-t border-white/5">
+          <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-12">
+            <div className="text-center md:text-left"><h3 className="text-2xl font-serif italic font-bold mb-4">HoliFest</h3><p className="text-white/40 text-sm max-w-xs">{t.footerDesc}</p></div>
+            <div className="text-center"><span className="text-[10px] uppercase tracking-[0.4em] text-white/30">Designed & Developed By</span><h3 className="text-2xl font-serif italic mt-2">Khushal Singh Chouhan</h3></div>
+            <div className="text-center md:text-right"><p className="text-white/60 text-sm">© 2026 {t.rightsReserved}</p><p className="text-white/20 text-[10px] uppercase tracking-widest">Made with Passion</p></div>
+          </div>
+        </footer>
+      </div>
+
+      <style dangerouslySetInnerHTML={{ __html: `
+        @keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+        .animate-shimmer { animation: shimmer 4s linear infinite; }
+        @keyframes flow { 0% { transform: translate(0, 0) scale(1); } 33% { transform: translate(20px, -20px) scale(1.1); } 66% { transform: translate(-20px, 20px) scale(0.9); } 100% { transform: translate(0, 0) scale(1); } }
+        .animate-flow { animation: flow 15s ease-in-out infinite; }
+        body { background-color: #050505; cursor: crosshair; }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #050505; }
+        ::-webkit-scrollbar-thumb { background: #222; border-radius: 10px; }
+      `}} />
+    </div>
+  );
+}
