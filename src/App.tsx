@@ -113,6 +113,20 @@ const themes: Theme[] = [
     bg: "#051a10",
     accents: ["#00FF7F", "#32CD32", "#20B2AA", "#00FA9A"],
     gradient: "from-emerald-600/20 via-teal-600/20 to-lime-600/10"
+  },
+  {
+    id: "rose",
+    name: { en: "Deep Rose", hi: "गहरा गुलाब" },
+    bg: "#1a050d",
+    accents: ["#FF1493", "#C71585", "#8B008B", "#FF69B4"],
+    gradient: "from-rose-600/20 via-purple-600/20 to-pink-600/10"
+  },
+  {
+    id: "ocean",
+    name: { en: "Ocean", hi: "महासागर" },
+    bg: "#05121a",
+    accents: ["#00BFFF", "#1E90FF", "#00CED1", "#4169E1"],
+    gradient: "from-blue-600/20 via-cyan-600/20 to-indigo-600/10"
   }
 ];
 
@@ -178,6 +192,28 @@ const Splash = React.memo(({ x, y, color, onComplete }: { x: number, y: number, 
   />
 ));
 
+const FloatingDust = React.memo(() => {
+  const { scrollYProgress } = useScroll();
+  const y1 = useTransform(scrollYProgress, [0, 1], [0, -200]);
+  const y2 = useTransform(scrollYProgress, [0, 1], [0, -400]);
+  const y3 = useTransform(scrollYProgress, [0, 1], [0, -100]);
+
+  return (
+    <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
+      <motion.div style={{ y: y1 }} className="absolute inset-0">
+        {Array.from({ length: 30 }).map((_, i) => (
+          <div key={i} className="absolute w-1 h-1 bg-white/20 rounded-full blur-[1px]" style={{ left: `${Math.random() * 100}%`, top: `${Math.random() * 100}%`, opacity: Math.random() * 0.6 }} />
+        ))}
+      </motion.div>
+      <motion.div style={{ y: y2 }} className="absolute inset-0">
+        {Array.from({ length: 20 }).map((_, i) => (
+          <div key={i} className="absolute w-2 h-2 bg-pink-500/10 rounded-full blur-[2px]" style={{ left: `${Math.random() * 100}%`, top: `${Math.random() * 100}%` }} />
+        ))}
+      </motion.div>
+    </div>
+  );
+});
+
 const InteractionLayer = React.memo(({ loading, theme }: { loading: boolean, theme: Theme }) => {
   const [splashes, setSplashes] = useState<any[]>([]);
   const [particles, setParticles] = useState<any[]>([]);
@@ -192,16 +228,10 @@ const InteractionLayer = React.memo(({ loading, theme }: { loading: boolean, the
       const now = Date.now();
       if (now - lastMoveTime.current < 32) return;
       lastMoveTime.current = now;
-
       const x = 'clientX' in e ? e.clientX : e.touches[0].clientX;
       const y = 'clientY' in e ? e.clientY : e.touches[0].clientY;
       const color = colors[Math.floor(Math.random() * colors.length)];
-      
-      setTrail(prev => {
-        const newTrail = [...prev, { id: Date.now() + Math.random(), x, y, color }];
-        if (newTrail.length > 8) return newTrail.slice(-8);
-        return newTrail;
-      });
+      setTrail(prev => [...prev, { id: Date.now() + Math.random(), x, y, color }].slice(-8));
     };
 
     const handleInteraction = (e: MouseEvent | TouchEvent) => {
@@ -210,16 +240,11 @@ const InteractionLayer = React.memo(({ loading, theme }: { loading: boolean, the
       const y = 'clientY' in e ? e.clientY : e.touches[0].clientY;
       const color = colors[Math.floor(Math.random() * colors.length)];
       const id = Date.now();
-
       setSplashes(prev => [...prev, { id, x, y, color }].slice(-3));
       setRipples(prev => [...prev, { id: id + 1, x, y, color }].slice(-3));
-      
       const particleCount = 8;
       const newParticles = Array.from({ length: particleCount }).map((_, i) => ({
-        id: id + 2 + i,
-        x, y, color,
-        angle: (i / particleCount) * Math.PI * 2,
-        distance: 80 + Math.random() * 80
+        id: id + 2 + i, x, y, color, angle: (i / particleCount) * Math.PI * 2, distance: 80 + Math.random() * 80
       }));
       setParticles(prev => [...prev, ...newParticles].slice(-20));
     };
@@ -228,7 +253,6 @@ const InteractionLayer = React.memo(({ loading, theme }: { loading: boolean, the
     window.addEventListener("touchmove", handleMove);
     window.addEventListener("mousedown", handleInteraction);
     window.addEventListener("touchstart", handleInteraction);
-
     return () => {
       window.removeEventListener("mousemove", handleMove);
       window.removeEventListener("touchmove", handleMove);
@@ -248,130 +272,3 @@ const InteractionLayer = React.memo(({ loading, theme }: { loading: boolean, the
     </div>
   );
 });
-
-export default function App() {
-  const [loading, setLoading] = useState(true);
-  const [copied, setCopied] = useState(false);
-  const [lang, setLang] = useState<"en" | "hi">("en");
-  const [currentTheme, setCurrentTheme] = useState<Theme>(themes[0]);
-  const [showThemeMenu, setShowThemeMenu] = useState(false);
-  const [greetings, setGreetings] = useState<Greeting[]>([]);
-  const [formData, setFormData] = useState({ name: "", recipient: "", message: "" });
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  
-  const t = translations[lang];
-  const { scrollYProgress } = useScroll();
-  const backgroundY = useTransform(scrollYProgress, [0, 1], ["0%", "20%"]);
-
-  useEffect(() => {
-    fetch("/api/greetings").then(res => res.json()).then(setGreetings);
-    const timer = setTimeout(() => setLoading(false), 3000);
-    return () => clearTimeout(timer);
-  }, []);
-
-  const postGreeting = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!formData.name || !formData.recipient || !formData.message || isSubmitting) return;
-    setIsSubmitting(true);
-    try {
-      const res = await fetch("/api/greetings", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData),
-      });
-      if (res.ok) {
-        setFormData({ name: "", recipient: "", message: "" });
-        fetch("/api/greetings").then(res => res.json()).then(setGreetings);
-      }
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  return (
-    <div className="relative min-h-screen text-white font-sans overflow-x-hidden transition-colors duration-1000" style={{ backgroundColor: currentTheme.bg }}>
-      <AnimatePresence>
-        {loading && (
-          <motion.div exit={{ opacity: 0 }} className="fixed inset-0 z-[100] bg-black flex items-center justify-center">
-            <motion.h1 animate={{ scale: [1, 1.1, 1] }} transition={{ repeat: Infinity, duration: 2 }} className="text-4xl font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-pink-500 via-yellow-500 to-emerald-500">KSC HOLI</motion.h1>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      <div className={`transition-opacity duration-1000 ${loading ? 'opacity-0' : 'opacity-100'}`}>
-        <InteractionLayer loading={loading} theme={currentTheme} />
-        
-        <header className="fixed top-0 w-full z-50 p-6 flex justify-between items-center mix-blend-difference">
-          <h2 className="font-black tracking-tighter text-xl">KSC</h2>
-          <div className="flex gap-4">
-            <button onClick={() => setShowThemeMenu(!showThemeMenu)} className="bg-white/10 p-2 rounded-full border border-white/20"><Palette size={18} /></button>
-            <button onClick={() => setLang(l => l === "en" ? "hi" : "en")} className="bg-white/10 px-4 py-2 rounded-full border border-white/20 text-xs font-bold uppercase">{lang === "en" ? "Hindi" : "English"}</button>
-          </div>
-        </header>
-
-        <AnimatePresence>
-          {showThemeMenu && (
-            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="fixed top-20 right-6 bg-black/80 backdrop-blur-xl p-4 rounded-2xl z-50 border border-white/10">
-              {themes.map(theme => (
-                <button key={theme.id} onClick={() => { setCurrentTheme(theme); setShowThemeMenu(false); }} className="block w-full text-left p-3 hover:bg-white/10 rounded-xl text-xs uppercase tracking-widest font-bold">{theme.name[lang]}</button>
-              ))}
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        <section className="h-screen flex flex-col items-center justify-center text-center px-6">
-          <motion.span className="text-pink-500 text-xs uppercase tracking-[0.5em] mb-4">{t.festivalOfColors}</motion.span>
-          <h1 className="text-7xl md:text-9xl font-serif italic font-black text-transparent bg-clip-text bg-gradient-to-r from-pink-500 via-yellow-400 to-emerald-400 animate-shimmer" style={{ backgroundSize: '200% auto' }}>{t.heroTitle1}<br/>{t.heroTitle2}</h1>
-          <p className="mt-8 text-white/50 max-w-md mx-auto">{t.visionText}</p>
-        </section>
-
-        <section className="py-20 px-6 max-w-6xl mx-auto grid md:grid-cols-2 gap-12 items-center">
-          <div className="aspect-[4/5] rounded-3xl overflow-hidden shadow-2xl">
-            <img src={t.visionImage} alt="Holi" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-          </div>
-          <div>
-            <span className="text-pink-500 text-xs uppercase font-bold">{t.vision}</span>
-            <h2 className="text-5xl font-serif italic mt-4">{t.symphony}</h2>
-            <p className="mt-6 text-white/60 leading-relaxed">{t.visionText}</p>
-          </div>
-        </section>
-
-        <section className="py-20 px-6 bg-white/5">
-          <div className="max-w-xl mx-auto bg-black/40 p-10 rounded-[3rem] border border-white/10">
-            <h2 className="text-3xl font-serif italic mb-8 text-center">{t.sendGreetings}</h2>
-            <form onSubmit={postGreeting} className="space-y-4">
-              <input value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} placeholder={t.yourName} className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl outline-none focus:border-pink-500" />
-              <input value={formData.recipient} onChange={e => setFormData({...formData, recipient: e.target.value})} placeholder={t.recipient} className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl outline-none focus:border-yellow-500" />
-              <textarea value={formData.message} onChange={e => setFormData({...formData, message: e.target.value})} placeholder={t.message} rows={4} className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl outline-none focus:border-emerald-500" />
-              <button type="submit" className="w-full bg-white text-black py-4 rounded-2xl font-bold uppercase tracking-widest hover:bg-pink-500 hover:text-white transition-all">{t.generate}</button>
-            </form>
-          </div>
-        </section>
-
-        <section className="py-20 px-6 max-w-7xl mx-auto">
-          <h2 className="text-center text-3xl font-serif italic mb-12">{t.communityGreetings}</h2>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {greetings.map(g => (
-              <div key={g.id} className="bg-white/5 border border-white/10 p-6 rounded-3xl">
-                <p className="text-lg italic mb-4">"{g.message}"</p>
-                <p className="text-xs uppercase tracking-widest text-white/40">{t.postedBy} <span className="text-white font-bold">{g.name}</span></p>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        <footer className="py-12 text-center border-t border-white/5">
-          <p className="text-white/40 text-xs uppercase tracking-widest">© 2026 {t.craftedBy}</p>
-        </footer>
-      </div>
-
-      <style dangerouslySetInnerHTML={{ __html: `
-        @keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
-        .animate-shimmer { animation: shimmer 4s linear infinite; }
-        @keyframes flow { 0% { transform: translate(0, 0) scale(1); } 33% { transform: translate(20px, -20px) scale(1.1); } 66% { transform: translate(-20px, 20px) scale(0.9); } 100% { transform: translate(0, 0) scale(1); } }
-        .animate-flow { animation: flow 15s ease-in-out infinite; }
-        body { cursor: crosshair; }
-      `}} />
-    </div>
-  );
-}
