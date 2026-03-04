@@ -17,4 +17,4 @@ A premium digital celebration of the Indian Festival of Colors with professional
 ---
 ### 👨‍💻 Crafted by
 **Khushal Singh Chouhan**
-© 2026 All Rights Reserved.
+© 2026 All Rights Reserved
