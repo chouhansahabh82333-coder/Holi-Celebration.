@@ -84,7 +84,6 @@ const Particle = React.memo(({ x, y, color, angle, distance, onComplete }: any) 
 const Splash = React.memo(({ x, y, color, onComplete }: any) => (
   <motion.div initial={{ scale: 0, opacity: 1, x: x - 50, y: y - 50 }} animate={{ scale: [0, 2, 2.5], opacity: 0 }} transition={{ duration: 1 }} onAnimationComplete={onComplete} className="absolute pointer-events-none z-40 w-[100px] h-[100px] blur-xl rounded-full" style={{ backgroundColor: color }} />
 ));
-
 const InteractionLayer = React.memo(({ loading, theme }: { loading: boolean, theme: Theme }) => {
   const [splashes, setSplashes] = useState<any[]>([]);
   const [particles, setParticles] = useState<any[]>([]);
@@ -125,6 +124,7 @@ const InteractionLayer = React.memo(({ loading, theme }: { loading: boolean, the
     </div>
   );
 });
+
 export default function App() {
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
@@ -141,8 +141,16 @@ export default function App() {
 
   useEffect(() => {
     fetch("/api/greetings").then(res => res.json()).then(setGreetings);
+    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    const socket = new WebSocket(`${protocol}//${window.location.host}`);
+    socket.onmessage = (event) => {
+      const payload = JSON.parse(event.data);
+      if (payload.type === "GREETING_ADDED") {
+        setGreetings(prev => [payload.data, ...prev].slice(0, 50));
+      }
+    };
     const timer = setTimeout(() => setLoading(false), 4000);
-    return () => clearTimeout(timer);
+    return () => { clearTimeout(timer); socket.close(); };
   }, []);
 
   const postGreeting = async (e: React.FormEvent) => {
@@ -150,22 +158,17 @@ export default function App() {
     if (!formData.name || !formData.recipient || !formData.message || isSubmitting) return;
     setIsSubmitting(true);
     try {
-      const res = await fetch("/api/greetings", {
+      await fetch("/api/greetings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(formData),
       });
-      if (res.ok) {
-        setFormData({ name: "", recipient: "", message: "" });
-        fetch("/api/greetings").then(res => res.json()).then(setGreetings);
-      }
+      setFormData({ name: "", recipient: "", message: "" });
     } finally { setIsSubmitting(false); }
   };
-
   return (
     <div className="relative min-h-screen text-white font-sans overflow-x-hidden transition-colors duration-1000" style={{ backgroundColor: currentTheme.bg }}>
       
-      {/* BACKGROUND FLOW EFFECTS */}
       <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
         <div className="absolute top-[-10%] left-[-10%] w-[60%] h-[60%] blur-[120px] rounded-full animate-flow opacity-20" style={{ backgroundColor: currentTheme.accents[0] }} />
         <div className="absolute bottom-[-10%] right-[-10%] w-[60%] h-[60%] blur-[120px] rounded-full animate-flow opacity-20 [animation-delay:5s]" style={{ backgroundColor: currentTheme.accents[1] }} />
@@ -179,8 +182,6 @@ export default function App() {
               <motion.div animate={{ rotate: 360 }} transition={{ duration: 10, repeat: Infinity, ease: "linear" }} className="absolute inset-0 border-t-2 border-pink-500/20 rounded-[2rem]" />
             </motion.div>
             <motion.h1 initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-3xl md:text-5xl font-serif italic text-white mb-4">Khushal Singh Chouhan</motion.h1>
-            
-            {/* LOADING DOTS */}
             <div className="flex gap-2 mt-4">
               {[0, 1, 2].map(i => (
                 <motion.div key={i} animate={{ opacity: [0.2, 1, 0.2] }} transition={{ duration: 1, repeat: Infinity, delay: i * 0.2 }} className="w-2 h-2 rounded-full bg-pink-500" />
@@ -201,20 +202,10 @@ export default function App() {
           </div>
         </header>
 
-        <AnimatePresence>
-          {showThemeMenu && (
-            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="fixed top-24 right-8 bg-black/80 backdrop-blur-xl p-4 rounded-2xl z-50 border border-white/10 min-w-[180px]">
-              {themes.map(theme => (
-                <button key={theme.id} onClick={() => { setCurrentTheme(theme); setShowThemeMenu(false); }} className="block w-full text-left p-4 hover:bg-white/10 rounded-xl text-[10px] uppercase tracking-widest font-bold">{theme.name[lang]}</button>
-              ))}
-            </motion.div>
-          )}
-        </AnimatePresence>
         <section className="h-screen flex flex-col items-center justify-center text-center px-8 relative z-10">
           <motion.span className="text-pink-500 text-[10px] uppercase tracking-[0.6em] mb-8">{t.festivalOfColors}</motion.span>
           <h1 className="text-[clamp(3rem,15vw,10rem)] leading-[0.85] font-serif italic font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-pink-500 via-yellow-400 to-emerald-400 animate-shimmer" style={{ backgroundSize: '200% auto' }}>{t.heroTitle1}<br/>{t.heroTitle2}</h1>
           <p className="mt-12 text-white/50 max-w-2xl mx-auto text-lg font-light">{t.visionText}</p>
-          
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 1 }} className="mt-16">
             <button onClick={() => document.getElementById('wishes')?.scrollIntoView({ behavior: 'smooth' })} className="group relative px-10 py-5 bg-white text-black rounded-full font-bold uppercase tracking-widest text-sm overflow-hidden transition-all hover:scale-105">
               <div className="absolute inset-0 bg-gradient-to-r from-pink-500 via-yellow-500 to-emerald-500 opacity-0 group-hover:opacity-100 transition-opacity" />
@@ -223,38 +214,29 @@ export default function App() {
           </motion.div>
         </section>
 
-        <section id="vision" className="py-32 px-8 max-w-7xl mx-auto grid md:grid-cols-2 gap-24 items-center">
-          <motion.div initial={{ opacity: 0, x: -50 }} whileInView={{ opacity: 1, x: 0 }} className="aspect-[4/5] rounded-[3rem] overflow-hidden relative group">
-            <img src={t.visionImage} alt="Holi" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-1000" referrerPolicy="no-referrer" />
-            <div className="absolute bottom-12 left-12 pr-12">
-              <p className="text-3xl font-serif italic text-white drop-shadow-2xl">"{t.quote}"</p>
+        <section id="vision" className="py-24 md:py-32 px-6 md:px-8 scroll-mt-20">
+          <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-12 md:gap-24 items-center">
+            <motion.div initial={{ opacity: 0, x: -50 }} whileInView={{ opacity: 1, x: 0 }} className="aspect-[4/5] rounded-[3rem] overflow-hidden relative group shadow-2xl">
+              <img src={t.visionImage} alt="Holi" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-1000" referrerPolicy="no-referrer" />
+              <div className="absolute bottom-12 left-12 pr-12"><p className="text-xl md:text-3xl font-serif italic text-white drop-shadow-2xl">"{t.quote}"</p></div>
+            </motion.div>
+            <div className="space-y-12">
+              <span className="text-pink-500 text-xs uppercase font-bold tracking-widest">{t.vision}</span>
+              <h2 className="text-3xl md:text-7xl font-serif font-light leading-[1.1] md:leading-tight">{lang === 'en' ? (<>A Symphony of <br className="hidden md:block" /><span className="italic">Vibrancy</span></>) : (<>जीवंतता की एक <br className="hidden md:block" /><span className="italic">सिम्फनी</span></>)}</h2>
+              <p className="text-white/60 text-lg leading-relaxed font-light">{t.visionText}</p>
             </div>
-          </motion.div>
-          <div className="space-y-12">
-            <span className="text-pink-500 text-xs uppercase font-bold tracking-widest">{t.vision}</span>
-            <h2 className="text-7xl font-serif font-light leading-tight">{t.symphony}</h2>
-            <p className="text-white/60 text-lg leading-relaxed font-light">{t.visionText}</p>
           </div>
         </section>
 
-        <section id="wishes" className="py-32 px-8 bg-white/5">
-          <div className="max-w-4xl mx-auto bg-black/40 backdrop-blur-3xl p-12 md:p-24 rounded-[4rem] border border-white/10 text-center">
-            <h2 className="text-5xl font-serif italic mb-8">{t.sendGreetings}</h2>
-            <p className="text-white/50 mb-12 max-w-lg mx-auto">{t.greetingsDesc}</p>
+        <section id="wishes" className="py-24 md:py-32 px-6 md:px-8 bg-white/5 scroll-mt-24">
+          <div className="max-w-4xl mx-auto bg-black/40 backdrop-blur-3xl p-12 md:p-24 rounded-[4rem] border border-white/10 text-center shadow-2xl">
+            <h2 className="text-4xl md:text-6xl font-serif italic mb-8">{t.sendGreetings}</h2>
+            <p className="text-white/50 mb-12 max-w-lg mx-auto leading-relaxed">{t.greetingsDesc}</p>
             <form onSubmit={postGreeting} className="space-y-8 text-left">
-              <div className="space-y-2">
-                <label className="text-[10px] uppercase tracking-widest text-white/40 ml-4">{t.yourName}</label>
-                <input value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} placeholder={t.placeholderName} className="w-full bg-white/5 border border-white/10 p-5 rounded-2xl outline-none focus:border-pink-500" />
-              </div>
-              <div className="space-y-2">
-                <label className="text-[10px] uppercase tracking-widest text-white/40 ml-4">{t.recipient}</label>
-                <input value={formData.recipient} onChange={e => setFormData({...formData, recipient: e.target.value})} placeholder={t.recipient} className="w-full bg-white/5 border border-white/10 p-5 rounded-2xl outline-none focus:border-yellow-500" />
-              </div>
-              <div className="space-y-2">
-                <label className="text-[10px] uppercase tracking-widest text-white/40 ml-4">{t.message}</label>
-                <textarea value={formData.message} onChange={e => setFormData({...formData, message: e.target.value})} placeholder={t.placeholderMessage} rows={4} className="w-full bg-white/5 border border-white/10 p-5 rounded-2xl outline-none focus:border-emerald-500 resize-none" />
-              </div>
-              <button type="submit" className="w-full bg-white text-black py-5 rounded-2xl font-bold uppercase tracking-widest hover:bg-pink-500 hover:text-white transition-all flex items-center justify-center gap-3">{t.generate} <Send size={18} /></button>
+              <div className="space-y-3"><label className="text-[10px] uppercase tracking-[0.2em] text-white/40 ml-4 font-bold">{t.yourName}</label><input value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} placeholder={t.placeholderName} className="w-full bg-white/5 border border-white/10 p-5 rounded-2xl outline-none focus:border-pink-500 focus:bg-white/10 transition-all" /></div>
+              <div className="space-y-3"><label className="text-[10px] uppercase tracking-[0.2em] text-white/40 ml-4 font-bold">{t.recipient}</label><input value={formData.recipient} onChange={e => setFormData({...formData, recipient: e.target.value})} placeholder={t.recipient} className="w-full bg-white/5 border border-white/10 p-5 rounded-2xl outline-none focus:border-yellow-500 focus:bg-white/10 transition-all" /></div>
+              <div className="space-y-3"><label className="text-[10px] uppercase tracking-[0.2em] text-white/40 ml-4 font-bold">{t.message}</label><textarea value={formData.message} onChange={e => setFormData({...formData, message: e.target.value})} placeholder={t.placeholderMessage} rows={4} className="w-full bg-white/5 border border-white/10 p-5 rounded-2xl outline-none focus:border-emerald-500 focus:bg-white/10 transition-all resize-none" /></div>
+              <button type="submit" className="w-full bg-white text-black py-5 rounded-2xl font-bold uppercase tracking-widest hover:bg-pink-500 hover:text-white transition-all flex items-center justify-center gap-3 shadow-xl active:scale-[0.98]">{t.generate} <Send size={18} /></button>
             </form>
           </div>
         </section>
@@ -264,7 +246,7 @@ export default function App() {
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-8">
             <AnimatePresence mode="popLayout">
               {greetings.map(g => (
-                <motion.div key={g.id} layout initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} whileHover={{ scale: 1.05 }} className="bg-white/5 border border-white/10 p-8 rounded-[2rem] hover:bg-white/10 transition-all cursor-default">
+                <motion.div key={g.id} layout initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} whileHover={{ scale: 1.05 }} className="bg-white/5 border border-white/10 p-8 rounded-[2rem] hover:bg-white/10 transition-all cursor-default shadow-lg">
                   <div className="w-12 h-12 bg-pink-500/20 rounded-2xl flex items-center justify-center text-pink-500 mb-6"><User size={24} /></div>
                   <p className="text-xl italic mb-8 font-light leading-relaxed">"{g.message}"</p>
                   <div className="pt-6 border-t border-white/5"><p className="text-xs uppercase tracking-widest text-white/40">{t.postedBy} <span className="text-white font-bold">{g.name}</span></p></div>
