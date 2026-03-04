@@ -24,6 +24,13 @@ async function start() {
     const vite = await createViteServer({ server: { middlewareMode: true }, appType: "spa" });
     app.use(vite.middlewares);
   }
-  server.listen(PORT, "0.0.0.0", () => console.log(`Server at http://localhost:${PORT}`));
+    else {
+    app.use(express.static(path.resolve("dist/public")));
+    app.get("*", (req, res) => {
+      res.sendFile(path.resolve("dist/public/index.html"));
+     });
+    }
+  
+  server.listen(PORT, "0.0.0.0", () => { console.log(`Server at http://localhost:${PORT}`)); }
 }
 start();
