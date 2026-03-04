@@ -1,7 +1,8 @@
-import express from "express";
+Import express from "express";
 import { createServer as createViteServer } from "vite";
 import { WebSocketServer, WebSocket } from "ws";
 import { createServer } from "http";
+import path from "path";
 
 const app = express();
 const server = createServer(app);
@@ -21,16 +22,22 @@ app.post("/api/greetings", (req, res) => {
 
 async function start() {
   if (process.env.NODE_ENV !== "production") {
-    const vite = await createViteServer({ server: { middlewareMode: true }, appType: "spa" });
+    const vite = await createViteServer({ 
+      server: { middlewareMode: true }, 
+      appType: "spa" 
+    });
     app.use(vite.middlewares);
-  }
-    else {
+  } else {
+    // This tells Render where your Holi animation files are
     app.use(express.static(path.resolve("dist/public")));
     app.get("*", (req, res) => {
       res.sendFile(path.resolve("dist/public/index.html"));
-     });
-    }
-  
-  server.listen(PORT, "0.0.0.0", () => { console.log(`Server at http://localhost:${PORT}`)); }
+    });
+  }
+
+  server.listen(PORT, "0.0.0.0", () => {
+    console.log(`Server at http://localhost:${PORT}`);
+  });
 }
+
 start();
